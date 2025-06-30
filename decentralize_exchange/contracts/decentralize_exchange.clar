@@ -181,4 +181,59 @@
         (err u0)  ;; Using u0 as error code for zero liquidity
         (ok (/ (* reserve-x u1000000) reserve-y)))))  ;; Price multiplied by 1M for precision
 
+;; Calculate impermanent loss for a given price change
+(define-read-only (calculate-impermanent-loss
+    (initial-price uint)
+    (current-price uint))
+    (let (
+        (price-ratio (/ (* current-price u1000000) initial-price))
+        (sqrt-ratio (sqrti price-ratio))
+    )
+    (ok (- (/ (* u2 sqrt-ratio) (+ u1000000 price-ratio)) u1000000))))
 
+;; Calculate the minimum amount of liquidity tokens that should be minted
+(define-read-only (get-minimum-liquidity
+    (amount-x uint)
+    (amount-y uint))
+    (let (
+        (geometric-mean (sqrti (* amount-x amount-y))))
+    (ok (/ geometric-mean u100))))  ;; 1% of geometric mean
+
+
+;; Calculate accumulated fees for a liquidity provider
+(define-read-only (get-accumulated-fees
+    (provider principal)
+    (token-x (string-ascii 32))
+    (token-y (string-ascii 32)))
+    (let (
+        (provider-share (unwrap! (get-pool-share provider) (err u0)))
+        (reserves (unwrap! (get-reserves token-x token-y) (err u0)))
+        (total-fees-x (/ (* (get reserve-x reserves) fee-numerator) fee-denominator))
+        (total-fees-y (/ (* (get reserve-y reserves) fee-numerator) fee-denominator))
+    )
+    (ok {
+        fees-x: (/ (* total-fees-x provider-share) u10000),
+        fees-y: (/ (* total-fees-y provider-share) u10000)
+    })))
+
+
+;; Get volume-based fee tier for a liquidity provider
+(define-read-only (get-fee-tier (provider principal))
+    (let (
+        (provider-liquidity (get-liquidity-provider-balance provider))
+    )
+    (ok (if (>= provider-liquidity u1000000000)
+            u2  ;; 0.2% fee for large LPs
+            (if (>= provider-liquidity u100000000)
+                u25  ;; 0.25% fee for medium LPs
+                u3))))) ;; 0.3% fee for small LPs
+
+;; Predict liquidity mining rewards
+(define-read-only (predict-mining-rewards
+    (provider principal)
+    (blocks uint))
+    (let (
+        (provider-share (unwrap! (get-pool-share provider) (err u0)))
+        (base-reward-per-block u100)  ;; Base reward tokens per block
+    )
+    (ok (/ (* (* blocks base-reward-per-block) provider-share) u10000))))
