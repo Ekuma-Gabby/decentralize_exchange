@@ -148,3 +148,37 @@
               reserve-y: (- reserve-out amount-out) })
         
         (ok amount-out))))
+
+;; Initialize contract
+(begin
+    (var-set total-liquidity u0))
+
+;; Calculate the optimal amount of token-y needed given amount-x
+(define-read-only (get-optimal-amount-y
+    (token-x (string-ascii 32))
+    (token-y (string-ascii 32))
+    (amount-x uint))
+    (let (
+        (reserves (unwrap! (get-reserves token-x token-y) (err u0)))
+        (reserve-x (get reserve-x reserves))
+        (reserve-y (get reserve-y reserves))
+    )
+    (if (is-eq reserve-x u0)
+        (ok amount-x)
+        (ok (/ (* amount-x reserve-y) reserve-x)))))
+
+
+;; Calculate the current price of token-y in terms of token-x
+(define-read-only (get-price-y-in-x
+    (token-x (string-ascii 32))
+    (token-y (string-ascii 32)))
+    (let (
+        (reserves (unwrap! (get-reserves token-x token-y) (err u0)))
+        (reserve-x (get reserve-x reserves))
+        (reserve-y (get reserve-y reserves))
+    )
+    (if (or (is-eq reserve-x u0) (is-eq reserve-y u0))
+        (err u0)  ;; Using u0 as error code for zero liquidity
+        (ok (/ (* reserve-x u1000000) reserve-y)))))  ;; Price multiplied by 1M for precision
+
+
